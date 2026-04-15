@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // --- UI COMPONENTS ---
 import Sidebar from './components/Sidebar';
@@ -23,16 +23,48 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
 
-  // 1. DATA UTAMA
-  const [allLogs, setAllLogs] = useState([
-    { id: "8821", action: "System Validation", category: "Security", user: "IT SUPPORT ADMIN", status: "Pending", request: "Pending approval for HR access request.", aiResponse: "Risk level: Low.", time: "Just now" },
-    { id: "8825", action: "Database Migration", category: "Infrastructure", user: "DATABASE ENG", status: "Resolved", request: "Request to migrate legacy data.", aiResponse: "Backup detected.", time: "10 mins ago" },
-    { id: "8902", action: "Firewall Policy Update", category: "Network", user: "NETWORK SEC", status: "Rejected", request: "Opening port 8080.", aiResponse: "High Risk!", time: "1 hour ago" }
-  ]);
+  // 1. STATE UNTUK DATA API
+  const [allLogs, setAllLogs] = useState([]);
 
-  const handleProcessAction = (id, newStatus) => {
-    setAllLogs(prev => prev.map(log => log.id === id ? { ...log, status: newStatus } : log));
-    setSelectedLog(null);
+  // 2. PULL DATA DARI BACKEND SAAT APLIKASI DIMUAT
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/approval-logs');
+        if (response.ok) {
+          const data = await response.json();
+          setAllLogs(data);
+        }
+      } catch (error) {
+        console.error("Gagal menarik data dari Backend:", error);
+      }
+    };
+
+    // Hanya tarik data jika user sudah login (opsional, tapi lebih efisien)
+    if (user) {
+      fetchLogs();
+    }
+  }, [user]);
+
+  // 3. PUSH UPDATE KE BACKEND SAAT TOMBOL DITEKAN
+  const handleProcessAction = async (id, newStatus) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/approval-logs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }), 
+      });
+
+      if (response.ok) {
+        // Update UI secara lokal agar responsif tanpa perlu reload halaman
+        setAllLogs(prev => prev.map(log => log.id === id ? { ...log, status: newStatus } : log));
+        setSelectedLog(null);
+      } else {
+        alert("Gagal memproses aksi. Periksa koneksi ke database.");
+      }
+    } catch (error) {
+      console.error("Error saat memproses aksi:", error);
+    }
   };
 
   const handleLogout = () => {
@@ -42,7 +74,6 @@ export default function App() {
 
   // --- LOGIC RENDER CONTENT ---
   const renderContent = () => {
-    // Cek apakah menu mengandung kata 'approval'
     if (activeMenu.toLowerCase().includes('approval')) {
       return (
         <ApprovalDashboardPage 
@@ -104,28 +135,30 @@ export default function App() {
 
 /**
  * KOMPONEN TERPISAH: ApprovalDashboardPage
- * Supaya render lebih stabil dan tidak re-create function setiap kali App re-render.
  */
 function ApprovalDashboardPage({ allLogs, handleProcessAction, selectedLog, setSelectedLog }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
   const filteredLogs = allLogs.filter((log) => {
-    const matchesSearch = log.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          log.user.toLowerCase().includes(searchQuery.toLowerCase());
+    // Memastikan id dan user tidak undefined/null sebelum di-lowercase
+    const logId = log.id ? String(log.id).toLowerCase() : "";
+    const logUser = log.user ? log.user.toLowerCase() : "";
+    
+    const matchesSearch = logId.includes(searchQuery.toLowerCase()) || logUser.includes(searchQuery.toLowerCase());
     
     let matchesStatus = statusFilter === "All" || statusFilter === "Semua Status" 
       ? true 
       : (statusFilter === "Success" || statusFilter === "Resolved")
-        ? (log.status === "Resolved" || log.status === "Success")
-        : log.status.toLowerCase() === statusFilter.toLowerCase();
+        ? (log.status === "Resolved" || log.status === "Success" || log.status === "resolved")
+        : log.status?.toLowerCase() === statusFilter.toLowerCase();
 
     return matchesSearch && matchesStatus;
   });
 
   const dashboardStats = [
     { title: "Total Logs", value: allLogs.length.toString(), icon: "Activity", color: "text-indigo-400", bg: "bg-indigo-500/10" },
-    { title: "Pending Review", value: allLogs.filter(l => l.status === 'Pending').length.toString(), icon: "Clock", color: "text-amber-400", bg: "bg-amber-500/10" },
+    { title: "Pending Review", value: allLogs.filter(l => l.status?.toLowerCase() === 'pending').length.toString(), icon: "Clock", color: "text-amber-400", bg: "bg-amber-500/10" },
     { title: "Secured Nodes", value: "100%", icon: "ShieldCheck", color: "text-emerald-400", bg: "bg-emerald-500/10" },
   ];
 
@@ -165,7 +198,7 @@ function ApprovalDashboardPage({ allLogs, handleProcessAction, selectedLog, setS
                   <p className="bg-indigo-600/10 border border-indigo-500/20 p-4 rounded-xl text-slate-300 text-sm">{selectedLog.request}</p>
                </div>
                <div className="flex gap-3 mt-8">
-                  {selectedLog.status === "Pending" ? (
+                  {selectedLog.status?.toLowerCase() === "pending" ? (
                     <>
                       <button onClick={() => handleProcessAction(selectedLog.id, 'Rejected')} className="flex-1 py-3.5 rounded-xl border border-rose-500/30 text-rose-500 font-bold hover:bg-rose-500/10 transition-all">Reject</button>
                       <button onClick={() => handleProcessAction(selectedLog.id, 'Resolved')} className="flex-1 py-3.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">Approve</button>
