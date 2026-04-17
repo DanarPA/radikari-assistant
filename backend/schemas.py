@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, List, Dict
 
 # --- Schemas untuk Autentikasi (Google Workspace Nanti) ---
 class TokenRequest(BaseModel):
@@ -12,6 +12,9 @@ class ChatRequest(BaseModel):
     
     # Menambahkan user_id opsional untuk antisipasi saat otentikasi diaktifkan
     user_id: Optional[str] = "anonim" 
+    
+    # BARU: Menambahkan variabel history agar AI memiliki "Ingatan" dari React
+    history: Optional[List[Dict[str, str]]] = []
 
 # --- Schemas untuk Approval Dashboard ---
 class ApprovalAction(BaseModel):

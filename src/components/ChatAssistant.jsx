@@ -5,10 +5,10 @@ export default function ChatAssistant({ user, activeMenu }) {
   const userRole = user?.role || 'GUEST';
   
   const chatEndRef = useRef(null);
-  const fileInputRef = useRef(null); // Ref untuk input file tersembunyi
+  const fileInputRef = useRef(null);
 
   const [messages, setMessages] = useState([
-    { text: `Halo ${firstName}! Ada yang bisa dibantu untuk kendala IT hari ini?`, isBot: true }
+    { text: `Halo ${firstName}! Ada yang bisa dibantu hari ini?`, isBot: true }
   ]);
   const [input, setInput] = useState("");
 
@@ -16,17 +16,14 @@ export default function ChatAssistant({ user, activeMenu }) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Fungsi buat trigger klik pada input file yang sembunyi
   const handleUploadClick = () => {
     fileInputRef.current.click();
   };
 
-  // Fungsi saat file dipilih
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setMessages([...messages, { text: `📁 Menyiapkan file: ${file.name}`, isBot: false }]);
-      // Di sini lo bisa lanjutin logic upload ke server kalau mau
     }
   };
 
@@ -40,37 +37,37 @@ export default function ChatAssistant({ user, activeMenu }) {
     setInput("");
 
     try {
-      const response = await fetch('/api/v1/chat/completions', { 
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_OPENCLAW_TOKEN}`
-      },
-      body: JSON.stringify({ 
-        model: "openclaw", 
-        messages: [
-          { 
-            role: "user", 
-            content: `[Context: User ${firstName}, Role ${userRole}, Divisi ${activeMenu}] ${userMessage}` 
-          }
-        ],
-        stream: false 
-      }),
-    });
+      // 2. Menembak ke Backend FastAPI kamu di port 8000
+      const response = await fetch('http://127.0.0.1:8000/api/chat', { 
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          message: userMessage,
+          divisi: activeMenu ? activeMenu.toLowerCase() : "hr", 
+          user_id: userRole,
+          // BARU: Mengirimkan riwayat chat agar AI ingat konteks obrolan
+          history: messages.slice(-6).map(m => ({
+            role: m.isBot ? "assistant" : "user",
+            content: m.text
+          }))
+        })
+      });
 
-      if (!response.ok) throw new Error('Gateway Error');
+      if (!response.ok) throw new Error('Backend Error');
 
       const data = await response.json();
 
-      // 2. Ambil jawaban dari struktur data OpenAI
-      const botReply = data.choices?.[0]?.message?.content || "DeepSeek tidak memberikan respons.";
+      // 3. Mengambil jawaban dari struktur return FastAPI
+      const botReply = data.reply || "Maaf, tidak ada respons dari sistem.";
       
       setMessages(prev => [...prev, { text: botReply, isBot: true }]);
 
     } catch (error) {
-      // Penanganan jika Docker/Gateway mati
+      // Penanganan jika server FastAPI mati
       setMessages(prev => [...prev, { 
-        text: "❌ Koneksi ke Node terputus. Pastikan Docker OpenClaw di port 18789 sudah jalan!", 
+        text: "❌ Koneksi ke Backend terputus. Pastikan server FastAPI (port 8000) sudah berjalan!", 
         isBot: true 
       }]);
     }
@@ -85,7 +82,7 @@ export default function ChatAssistant({ user, activeMenu }) {
           <div key={i} className={`flex ${m.isBot ? 'justify-start' : 'justify-end'} animate-in fade-in duration-300`}>
             <div className={`max-w-[75%] p-5 text-sm leading-relaxed ${
               m.isBot 
-                ? 'bg-slate-800/40 text-slate-200 border border-white/5 rounded-2xl rounded-tl-none backdrop-blur-md' 
+                ? 'bg-slate-800/40 text-slate-200 border border-white/5 rounded-2xl rounded-tl-none backdrop-blur-md whitespace-pre-wrap' 
                 : 'bg-red-600 text-white font-bold rounded-2xl rounded-tr-none shadow-lg shadow-red-900/20'
             }`}>
               {m.text}
@@ -99,7 +96,6 @@ export default function ChatAssistant({ user, activeMenu }) {
       <div className="shrink-0 p-8 border-t border-white/5 bg-[#0f172a]/80 backdrop-blur-xl">
         <form onSubmit={handleSend} className="max-w-6xl mx-auto flex items-center gap-4">
           
-          {/* INPUT FILE TERSEMBUNYI */}
           <input 
             type="file"
             ref={fileInputRef}
@@ -107,10 +103,9 @@ export default function ChatAssistant({ user, activeMenu }) {
             className="hidden" 
           />
 
-          {/* TOMBOL UPLOAD (+) */}
           <button 
             type="button"
-            onClick={handleUploadClick} // Sekarang ada fungsinya!
+            onClick={handleUploadClick}
             className="flex items-center justify-center w-14 h-14 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all shrink-0"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

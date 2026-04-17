@@ -1,41 +1,66 @@
-import requests
+import os
+import json
+from openai import OpenAI
+from dotenv import load_dotenv
 
-# KITA GANTI KE ALAMAT STANDAR YANG DIKENALI OPENCLAW
-OPENCLAW_URL = "http://127.0.0.1:3000/v1/chat/completions"
+# Memastikan environment variables terbaca
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-def ask_deepseek(prompt_text):
-    # OpenClaw mengharapkan format data standar seperti OpenAI
-    payload = {
-        "model": "deepseek/deepseek-chat", # Memastikan OpenClaw memakai DeepSeek
-        "messages": [
-            {"role": "system", "content": "Anda adalah asisten HR digital Radikari."},
-            {"role": "user", "content": prompt_text}
-        ]
+client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com"
+)
+
+def ask_deepseek(prompt_text, history=None):
+    """
+    Fungsi untuk mengirim prompt ke DeepSeek, menyertakan riwayat obrolan,
+    dan memaksanya membalas dengan format JSON.
+    """
+    if history is None:
+        history = []
+        
+    # Instruksi khusus agar AI mendeteksi niat user
+    system_prompt = """
+    Anda adalah asisten HR digital Radikari. Tugas Anda:
+    1. Menjawab pertanyaan berdasarkan SOP.
+    2. Mendeteksi jika user memberikan instruksi untuk melakukan tindakan (misal: "Buat draf kontrak", "Ajukan cuti", "Tolong bikinkan surat").
+
+    Anda HARUS merespons HANYA dalam format JSON yang valid dengan struktur berikut:
+    {
+        "intent": "qa" (jika hanya tanya jawab) ATAU "action" (jika user meminta tindakan),
+        "action_type": "nama_tindakan" (misal: "buat_kontrak" / null jika qa),
+        "reply": "Jawaban profesional Anda untuk user berdasarkan SOP"
     }
+    """
+
+    # 1. Masukkan instruksi sistem sebagai pondasi
+    messages_payload = [{"role": "system", "content": system_prompt}]
     
-    headers = {
-        "Content-Type": "application/json"
-    }
+    # 2. Sisipkan riwayat obrolan sebelumnya agar AI ingat konteks
+    for msg in history:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if content:
+            messages_payload.append({"role": role, "content": content})
+        
+    # 3. Masukkan pertanyaan/pesan terbaru user (yang sudah dirakit dengan SOP) di urutan terakhir
+    messages_payload.append({"role": "user", "content": prompt_text})
 
     try:
-        # Menembak ke server OpenClaw Gateway
-        response = requests.post(OPENCLAW_URL, json=payload, headers=headers)
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=messages_payload, # Menggunakan payload yang sudah dirakit lengkap
+            temperature=0.1, # Dibuat sangat rendah agar format JSON tidak rusak
+            response_format={"type": "json_object"} # FITUR KHUSUS: Memaksa DeepSeek mengeluarkan JSON murni
+        )
         
-        # Jika berhasil
-        if response.status_code == 200:
-            data = response.json()
-            # Mengambil teks jawaban dari format OpenAI
-            return data["choices"][0]["message"]["content"]
-            
-        # Jika OpenClaw meminta password/token keamanan (Error 401)
-        elif response.status_code == 401:
-            return "Error 401: OpenClaw meminta Token Keamanan. Kita perlu memasukkan Token di headers."
-            
-        else:
-            print(f"OpenClaw Error {response.status_code}: {response.text}")
-            return f"Gagal dari OpenClaw (Error {response.status_code}). Cek terminal backend."
-
-    except requests.exceptions.ConnectionError:
-        return "Gagal terhubung. Pastikan server OpenClaw di port 3000 masih menyala."
+        # Mengambil string JSON dari AI dan mengubahnya menjadi tipe data Dictionary di Python
+        result_text = response.choices[0].message.content
+        return json.loads(result_text)
+        
+    except json.JSONDecodeError:
+        return {"intent": "error", "reply": "Maaf, terjadi kesalahan format dalam membaca respons AI."}
     except Exception as e:
-        return f"Terjadi kesalahan internal: {e}"
+        print(f"Error DeepSeek API: {e}")
+        return {"intent": "error", "reply": "Maaf, sistem AI sedang mengalami kendala jaringan."}

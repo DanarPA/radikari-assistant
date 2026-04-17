@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import os
+import json  # Ditambahkan untuk menangani tipe data JSONB di database
 
 from core.ai_client import ask_deepseek
 from db_config import get_db_connection
@@ -28,42 +29,108 @@ app.add_middleware(
 @app.post("/api/chat")
 async def chat_with_ai(request: schemas.ChatRequest):
     try:
-        # 1. Merakit Konteks dari Database PostgreSQL
+        # 1. Merakit Konteks dari Database
         prompt_with_context = assemble_context(request.divisi, request.message)
         
         if not prompt_with_context:
             return {"reply": f"Maaf, dokumen SOP untuk divisi {request.divisi} belum tersedia di database."}
 
-        # 2. Mengirim ke OpenClaw (DeepSeek)
-        ai_response = ask_deepseek(prompt_with_context)
+        # 2. Mengirim ke DeepSeek (dengan ingatan!)
+        ai_response = ask_deepseek(prompt_with_context, request.history)
         
-        # 3. Mengembalikan Jawaban Asli dari AI ke Pengguna
+        # Mengekstrak data dari respons JSON
+        intent = ai_response.get("intent", "qa")
+        action_type = ai_response.get("action_type")
+        bot_reply = ai_response.get("reply", "Maaf, format respons tidak dikenali.")
+
+        # 3. Logika Percabangan & Pencatatan Database
+        if intent == "action":
+            # Buka koneksi ke database untuk menyimpan log
+            conn = get_db_connection()
+            if conn:
+                try:
+                    cur = conn.cursor()
+                    
+                    # Menghapus "requested_by" dari query SQL karena kolomnya tidak ada di database aslimu
+                    insert_query = """
+                        INSERT INTO action_approvals ("action_type", "division", "status", "payload", "ai_reasoning")
+                        VALUES (%s, %s, %s, %s, %s)
+                    """
+                    
+                    # Titipkan data user_id ke dalam kolom payload (JSON)
+                    payload_data = json.dumps({
+                        "raw_request": request.message,
+                        "requested_by": request.user_id
+                    })
+                    
+                    # Eksekusi dengan 5 variabel saja, sesuai dengan kolom di atas
+                    cur.execute(insert_query, (
+                        action_type, 
+                        request.divisi, 
+                        "Pending", 
+                        payload_data, 
+                        bot_reply
+                    ))
+                    conn.commit()
+                    cur.close()
+                except Exception as db_err:
+                    print(f"Gagal menyimpan ke database: {db_err}")
+                finally:
+                    conn.close()
+
+            # Tambahkan label informasi untuk user di UI
+            final_reply = f"⚙️ [STATUS: MENUNGGU APPROVAL SPV]\nPermintaan aksi '{action_type}' telah dicatat di sistem dan menunggu persetujuan dari Supervisor.\n\n{bot_reply}"
+        else:
+            # Jika hanya tanya jawab biasa
+            final_reply = bot_reply
+
+        # 4. Mengembalikan Jawaban
         return {
-            "reply": ai_response,
+            "reply": final_reply,
+            "intent": intent,
             "status": "success"
         }
 
     except Exception as e:
         return {"error": f"Gagal memproses AI: {str(e)}"}
-
+    
 @app.get("/api/approval-logs")
 async def get_approval_logs():
     try:
-        # PERBAIKAN: Menggunakan get_db_connection() yang benar
         conn = get_db_connection()
         if not conn:
             return {"error": "Koneksi database gagal."}
             
-        # (Opsional) Di sini kamu bisa menambahkan logika SELECT ke tabel action_approvals
-        # cur = conn.cursor()
-        # cur.execute("SELECT * FROM action_approvals")
-        # logs = cur.fetchall()
-        # cur.close()
+        cur = conn.cursor()
+        # Mengambil data log yang statusnya masih Pending, diurutkan dari yang terbaru
+        cur.execute("""
+            SELECT id, action_type, division, status, payload, ai_reasoning, created_at 
+            FROM action_approvals 
+            WHERE status = 'Pending'
+            ORDER BY created_at DESC
+        """)
+        
+        # Mengambil semua baris hasil query
+        rows = cur.fetchall()
+        
+        # Merakit data ke dalam format list of dictionary (JSON friendly)
+        logs = []
+        for row in rows:
+            logs.append({
+                "id": row[0],
+                "action": row[1],
+                "category": row[2],
+                "status": row[3],
+                "request": row[4].get("raw_request", "") if isinstance(row[4], dict) else str(row[4]),
+                "aiResponse": row[5],
+                "time": str(row[6])
+            })
 
-        # Selalu tutup koneksi setelah selesai
+        cur.close()
         conn.close()
         
-        return {"message": "Mengambil data pending approval dari Postgres", "status": "success"}
+        return {"data": logs, "status": "success"}
+        
     except Exception as e:
         return {"error": f"Terjadi kesalahan: {str(e)}"}
 
@@ -104,3 +171,29 @@ async def test_database_connection():
 @app.get("/")
 async def root():
     return {"status": "Backend Radikari Assistant V3 - Terhubung ke PostgreSQL!"}
+
+# --- ENDPOINT DEBUGGING ---
+@app.get("/api/debug-kolom")
+async def debug_kolom():
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return {"error": "Koneksi database gagal"}
+            
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'action_approvals';
+        """)
+        kolom = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        return {
+            "pesan": "Ini adalah daftar kolom yang dilihat oleh Python saat ini:",
+            "daftar_kolom": [k[0] for k in kolom]
+        }
+    except Exception as e:
+        return {"error": str(e)}
