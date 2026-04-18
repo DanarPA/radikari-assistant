@@ -136,11 +136,71 @@ async def get_approval_logs():
 
 @app.patch("/api/approval-logs/{log_id}")
 async def update_approval_status(log_id: int, action: schemas.ApprovalAction):
-    if action.status.lower() == "approved":
-        pass
-        # Logika update status persetujuan di database bisa ditambahkan di sini
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return {"error": "Koneksi database gagal."}
+            
+        cur = conn.cursor()
         
-    return {"message": f"Aksi {log_id} telah diproses."}
+        # Eksekusi perintah UPDATE ke tabel action_approvals
+        # Ini akan mengubah status "Pending" menjadi "Approved" atau "Rejected"
+        update_query = "UPDATE action_approvals SET status = %s WHERE id = %s"
+        cur.execute(update_query, (action.status, log_id))
+        conn.commit()
+        
+        # Mengecek apakah benar-benar ada baris yang terupdate
+        row_count = cur.rowcount
+        
+        cur.close()
+        conn.close()
+        
+        if row_count == 0:
+            # Jika ID tidak ditemukan
+            return {"error": f"Log dengan ID {log_id} tidak ditemukan.", "status": "failed"}
+            
+        return {"message": f"Aksi {log_id} berhasil diubah menjadi {action.status}.", "status": "success"}
+        
+    except Exception as e:
+        return {"error": f"Terjadi kesalahan saat update: {str(e)}"}
+    
+@app.get("/api/approval-history")
+async def get_approval_history():
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return {"error": "Koneksi database gagal."}
+            
+        cur = conn.cursor()
+        # Mengambil data log yang statusnya Approved atau Rejected
+        cur.execute("""
+            SELECT id, action_type, division, status, payload, ai_reasoning, created_at 
+            FROM action_approvals 
+            WHERE status IN ('Approved', 'Rejected')
+            ORDER BY created_at DESC
+        """)
+        
+        rows = cur.fetchall()
+        
+        logs = []
+        for row in rows:
+            logs.append({
+                "id": row[0],
+                "action": row[1],
+                "category": row[2],
+                "status": row[3],
+                "request": row[4].get("raw_request", "") if isinstance(row[4], dict) else str(row[4]),
+                "aiResponse": row[5],
+                "time": str(row[6])
+            })
+
+        cur.close()
+        conn.close()
+        
+        return {"data": logs, "status": "success"}
+        
+    except Exception as e:
+        return {"error": f"Terjadi kesalahan: {str(e)}"}
 
 @app.get("/api/test-db")
 async def test_database_connection():
