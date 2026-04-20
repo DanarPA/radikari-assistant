@@ -9,24 +9,22 @@ export default function HRDashboard() {
   // State untuk mengontrol tab mana yang sedang aktif ('pending' atau 'history')
   const [activeTab, setActiveTab] = useState('pending'); 
 
-  // 2. Fungsi untuk menarik data dari FastAPI (Mengambil Pending dan History sekaligus)
+  // 2. Fungsi untuk menarik data dari FastAPI (Filter Khusus HR dengan .includes)
   const fetchLogs = async () => {
     try {
       setIsLoading(true);
       
-      // Ambil data Pending
-      const resPending = await fetch('http://127.0.0.1:8000/api/approval-logs');
-      const dataPending = await resPending.json();
-      if (dataPending.status === 'success') {
-        setApprovalLogs(dataPending.data);
-      }
+      // Di bagian Pending
+const hrPending = dataPending.data.filter(log => 
+  log.category?.toLowerCase().includes('hr') || log.category?.toLowerCase().includes('ai-assistant')
+);
+setApprovalLogs(hrPending);
 
-      // Ambil data History
-      const resHistory = await fetch('http://127.0.0.1:8000/api/approval-history');
-      const dataHistory = await resHistory.json();
-      if (dataHistory.status === 'success') {
-        setHistoryLogs(dataHistory.data);
-      }
+// Di bagian History
+const hrHistory = dataHistory.data.filter(log => 
+  log.category?.toLowerCase().includes('hr') || log.category?.toLowerCase().includes('ai-assistant')
+);
+setHistoryLogs(hrHistory);
 
     } catch (error) {
       console.error("Gagal mengambil data log:", error);

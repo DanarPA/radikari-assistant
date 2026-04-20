@@ -12,9 +12,67 @@ export default function ChatAssistant({ user, activeMenu }) {
   ]);
   const [input, setInput] = useState("");
 
+  // Refs untuk radar Auto-Polling
+  const lastHistoryCount = useRef(0);
+  const isFirstLoad = useRef(true);
+
+  // 1. Auto-Scroll ke pesan terbaru
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // 2. RADAR TAK KASAT MATA (Auto-Polling setiap 5 detik)
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/approval-history');
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+          const divisiStr = activeMenu ? activeMenu.toLowerCase() : "hr";
+          
+          // Ambil history khusus divisi user ini saja
+          const myDivisiHistory = data.data.filter(
+            log => log.category?.toLowerCase() === divisiStr
+          );
+
+          if (isFirstLoad.current) {
+             // Set hitungan awal saat komponen pertama kali dimuat
+             lastHistoryCount.current = myDivisiHistory.length;
+             isFirstLoad.current = false;
+             return;
+          }
+
+          // Jika jumlah history bertambah, artinya SPV baru saja memproses antrean!
+          if (myDivisiHistory.length > lastHistoryCount.current) {
+             const newItemsCount = myDivisiHistory.length - lastHistoryCount.current;
+             // Karena query backend diurutkan DESC (terbaru di atas), kita ambil N item pertama
+             const newLogs = myDivisiHistory.slice(0, newItemsCount);
+             
+             newLogs.forEach(log => {
+               const isApproved = log.status.toLowerCase() === 'approved';
+               const statusIcon = isApproved ? '✅' : '❌';
+               const statusText = log.status.toUpperCase();
+               
+               // Munculkan chat bubble baru otomatis!
+               setMessages(prev => [...prev, { 
+                 text: `${statusIcon} [NOTIFIKASI SISTEM]\nPermintaan aksi '${log.action}' Anda telah di-${statusText} oleh Supervisor.\n\nDetail Request:\n"${log.request}"${isApproved ? '\n\nSistem sedang menyiapkan dokumen/eksekusi akhir Anda...' : ''}`, 
+                 isBot: true 
+               }]);
+             });
+
+             // Update hitungan radar ke jumlah terbaru
+             lastHistoryCount.current = myDivisiHistory.length;
+          }
+        }
+      } catch (err) {
+        // Abaikan error (silent fail) agar UI tidak terganggu jika terjadi network glitch
+      }
+    }, 5000); // Polling berjalan setiap 5000 ms (5 detik)
+
+    // Bersihkan interval jika user berpindah halaman/divisi
+    return () => clearInterval(pollInterval);
+  }, [activeMenu]);
 
   const handleUploadClick = () => {
     fileInputRef.current.click();
@@ -31,13 +89,11 @@ export default function ChatAssistant({ user, activeMenu }) {
     e.preventDefault();
     if (!input.trim()) return;
 
-    // 1. Tampilkan pesan user di UI
     const userMessage = input;
     setMessages(prev => [...prev, { text: userMessage, isBot: false }]);
     setInput("");
 
     try {
-      // 2. Menembak ke Backend FastAPI kamu di port 8000
       const response = await fetch('http://127.0.0.1:8000/api/chat', { 
         method: 'POST',
         headers: { 
@@ -45,9 +101,9 @@ export default function ChatAssistant({ user, activeMenu }) {
         },
         body: JSON.stringify({ 
           message: userMessage,
-          divisi: activeMenu ? activeMenu.toLowerCase() : "hr", 
+          // GANTI BARIS INI: Paksa nilainya menjadi "hr" untuk testing
+          divisi: "hr", 
           user_id: userRole,
-          // BARU: Mengirimkan riwayat chat agar AI ingat konteks obrolan
           history: messages.slice(-6).map(m => ({
             role: m.isBot ? "assistant" : "user",
             content: m.text
@@ -58,14 +114,11 @@ export default function ChatAssistant({ user, activeMenu }) {
       if (!response.ok) throw new Error('Backend Error');
 
       const data = await response.json();
-
-      // 3. Mengambil jawaban dari struktur return FastAPI
       const botReply = data.reply || "Maaf, tidak ada respons dari sistem.";
       
       setMessages(prev => [...prev, { text: botReply, isBot: true }]);
 
     } catch (error) {
-      // Penanganan jika server FastAPI mati
       setMessages(prev => [...prev, { 
         text: "❌ Koneksi ke Backend terputus. Pastikan server FastAPI (port 8000) sudah berjalan!", 
         isBot: true 
