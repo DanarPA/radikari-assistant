@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from pydantic import BaseModel # Ditambahkan untuk menerima request body token
 import os
-import json  # Ditambahkan untuk menangani tipe data JSONB di database
+import json
 
 from core.ai_client import ask_deepseek
 from db_config import get_db_connection
@@ -10,9 +11,12 @@ from database.repository import Repository
 import schemas
 from core.rag_engine import assemble_context
 
+# --- TAMBAHAN UNTUK GOOGLE LOGIN ---
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
 app = FastAPI()
 
-# Menambahkan port 5173 (bawaan Vite) agar frontend React bisa terkoneksi
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -26,44 +30,72 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- KONFIGURASI GOOGLE AUTH ---
+GOOGLE_CLIENT_ID = "165884247058-favgat2bm3k71g6sup4gk5uuv3h0offg.apps.googleusercontent.com"
+
+class GoogleAuthRequest(BaseModel):
+    token: str
+
+@app.post("/api/auth/google")
+async def google_auth(request: GoogleAuthRequest):
+    try:
+        # Verifikasi token yang dikirim dari React ke server Google
+        idinfo = id_token.verify_oauth2_token(request.token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        
+        email = idinfo.get('email')
+        name = idinfo.get('name')
+        
+        # Penentuan Hak Akses (Role) Berdasarkan Email
+        user_role = "STAFF" # Default untuk user biasa
+        
+        # Kamu bisa mengatur siapa saja yang menjadi SPV atau Admin di sini
+        if email == "supervisor@radikari.com" or "spv" in email:
+            user_role = "SPV"
+        elif "omar" in email.lower() or "fauzi" in email.lower(): 
+            user_role = "SUPER_ADMIN" # Akses penuh untuk developer
+            
+        return {
+            "status": "success",
+            "user": {
+                "email": email,
+                "name": name,
+                "role": user_role
+            }
+        }
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Token Google tidak valid atau kadaluarsa")
+
+# --- ENDPOINT CHAT ---
 @app.post("/api/chat")
 async def chat_with_ai(request: schemas.ChatRequest):
     try:
-        # 1. Merakit Konteks dari Database
         prompt_with_context = assemble_context(request.divisi, request.message)
         
         if not prompt_with_context:
             return {"reply": f"Maaf, dokumen SOP untuk divisi {request.divisi} belum tersedia di database."}
 
-        # 2. Mengirim ke DeepSeek (dengan ingatan!)
         ai_response = ask_deepseek(prompt_with_context, request.history)
         
-        # Mengekstrak data dari respons JSON
         intent = ai_response.get("intent", "qa")
         action_type = ai_response.get("action_type")
         bot_reply = ai_response.get("reply", "Maaf, format respons tidak dikenali.")
 
-        # 3. Logika Percabangan & Pencatatan Database
         if intent == "action":
-            # Buka koneksi ke database untuk menyimpan log
             conn = get_db_connection()
             if conn:
                 try:
                     cur = conn.cursor()
                     
-                    # Menghapus "requested_by" dari query SQL karena kolomnya tidak ada di database aslimu
                     insert_query = """
                         INSERT INTO action_approvals ("action_type", "division", "status", "payload", "ai_reasoning")
                         VALUES (%s, %s, %s, %s, %s)
                     """
                     
-                    # Titipkan data user_id ke dalam kolom payload (JSON)
                     payload_data = json.dumps({
                         "raw_request": request.message,
                         "requested_by": request.user_id
                     })
                     
-                    # Eksekusi dengan 5 variabel saja, sesuai dengan kolom di atas
                     cur.execute(insert_query, (
                         action_type, 
                         request.divisi, 
@@ -78,13 +110,10 @@ async def chat_with_ai(request: schemas.ChatRequest):
                 finally:
                     conn.close()
 
-            # Tambahkan label informasi untuk user di UI
             final_reply = f"⚙️ [STATUS: MENUNGGU APPROVAL SPV]\nPermintaan aksi '{action_type}' telah dicatat di sistem dan menunggu persetujuan dari Supervisor.\n\n{bot_reply}"
         else:
-            # Jika hanya tanya jawab biasa
             final_reply = bot_reply
 
-        # 4. Mengembalikan Jawaban
         return {
             "reply": final_reply,
             "intent": intent,
@@ -94,6 +123,7 @@ async def chat_with_ai(request: schemas.ChatRequest):
     except Exception as e:
         return {"error": f"Gagal memproses AI: {str(e)}"}
     
+# --- ENDPOINT LOGS & HISTORY ---
 @app.get("/api/approval-logs")
 async def get_approval_logs():
     try:
@@ -102,7 +132,6 @@ async def get_approval_logs():
             return {"error": "Koneksi database gagal."}
             
         cur = conn.cursor()
-        # Mengambil data log yang statusnya masih Pending, diurutkan dari yang terbaru
         cur.execute("""
             SELECT id, action_type, division, status, payload, ai_reasoning, created_at 
             FROM action_approvals 
@@ -110,10 +139,8 @@ async def get_approval_logs():
             ORDER BY created_at DESC
         """)
         
-        # Mengambil semua baris hasil query
         rows = cur.fetchall()
         
-        # Merakit data ke dalam format list of dictionary (JSON friendly)
         logs = []
         for row in rows:
             logs.append({
@@ -143,20 +170,16 @@ async def update_approval_status(log_id: int, action: schemas.ApprovalAction):
             
         cur = conn.cursor()
         
-        # Eksekusi perintah UPDATE ke tabel action_approvals
-        # Ini akan mengubah status "Pending" menjadi "Approved" atau "Rejected"
         update_query = "UPDATE action_approvals SET status = %s WHERE id = %s"
         cur.execute(update_query, (action.status, log_id))
         conn.commit()
         
-        # Mengecek apakah benar-benar ada baris yang terupdate
         row_count = cur.rowcount
         
         cur.close()
         conn.close()
         
         if row_count == 0:
-            # Jika ID tidak ditemukan
             return {"error": f"Log dengan ID {log_id} tidak ditemukan.", "status": "failed"}
             
         return {"message": f"Aksi {log_id} berhasil diubah menjadi {action.status}.", "status": "success"}
@@ -172,7 +195,6 @@ async def get_approval_history():
             return {"error": "Koneksi database gagal."}
             
         cur = conn.cursor()
-        # Mengambil data log yang statusnya Approved atau Rejected
         cur.execute("""
             SELECT id, action_type, division, status, payload, ai_reasoning, created_at 
             FROM action_approvals 
@@ -205,15 +227,12 @@ async def get_approval_history():
 @app.get("/api/test-db")
 async def test_database_connection():
     try:
-        # Mencoba membuka koneksi ke PostgreSQL
         conn = get_db_connection()
         if conn:
             cur = conn.cursor()
-            # Mengeksekusi perintah SQL sederhana untuk meminta versi Postgres
             cur.execute("SELECT version();")
             db_version = cur.fetchone()
             
-            # Tutup koneksi agar tidak bocor
             cur.close()
             conn.close()
             
@@ -232,7 +251,6 @@ async def test_database_connection():
 async def root():
     return {"status": "Backend Radikari Assistant V3 - Terhubung ke PostgreSQL!"}
 
-# --- ENDPOINT DEBUGGING ---
 @app.get("/api/debug-kolom")
 async def debug_kolom():
     try:
