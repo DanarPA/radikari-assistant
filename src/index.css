@@ -1,14 +1,37 @@
 @import "tailwindcss";
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+
+@theme {
+  /* 1. Deklarasikan variabel default di sini */
+  --color-scrollbar-thumb: #1e293b;
+  --color-scrollbar-hover: #ef4444;
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+
+/* 2. Gunakan @utility atau layer untuk memanipulasi variabel saat dark mode */
+@layer base {
+  :root {
+    /* Variabel default sudah ada di @theme, tapi kita bisa override di sini jika perlu */
+  }
+
+  .dark {
+    /* Di v4, cara paling aman untuk override variabel dark mode adalah seperti ini */
+    --color-scrollbar-thumb: #94a3b8;
+    --color-scrollbar-hover: #f87171;
+  }
 }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #ef4444;
+
+/* 3. Definisi Scrollbar Utility */
+@utility custom-scrollbar {
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb);
+    border-radius: 10px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-hover);
+  }
 }
