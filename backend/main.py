@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from pydantic import BaseModel # Ditambahkan untuk menerima request body token
+from pydantic import BaseModel
 import os
 import json
 
@@ -30,40 +30,109 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- KONFIGURASI GOOGLE AUTH ---
+# --- KONFIGURASI AUTHENTICATION ---
 GOOGLE_CLIENT_ID = "165884247058-favgat2bm3k71g6sup4gk5uuv3h0offg.apps.googleusercontent.com"
 
 class GoogleAuthRequest(BaseModel):
     token: str
 
+class LocalLoginRequest(BaseModel):
+    username: str
+    password: str
+
+# 1. JALUR GOOGLE WORKSPACE (UNTUK KARYAWAN)
 @app.post("/api/auth/google")
 async def google_auth(request: GoogleAuthRequest):
     try:
-        # Verifikasi token yang dikirim dari React ke server Google
+        # Verifikasi token Google
         idinfo = id_token.verify_oauth2_token(request.token, google_requests.Request(), GOOGLE_CLIENT_ID)
-        
         email = idinfo.get('email')
-        name = idinfo.get('name')
         
-        # Penentuan Hak Akses (Role) Berdasarkan Email
-        user_role = "STAFF" # Default untuk user biasa
-        
-        # Kamu bisa mengatur siapa saja yang menjadi SPV atau Admin di sini
-        if email == "supervisor@radikari.com" or "spv" in email:
-            user_role = "SPV"
-        elif "omar" in email.lower() or "fauzi" in email.lower(): 
-            user_role = "SUPER_ADMIN" # Akses penuh untuk developer
+        # Buka koneksi ke Database
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Gagal terhubung ke database")
             
-        return {
-            "status": "success",
-            "user": {
-                "email": email,
-                "name": name,
-                "role": user_role
-            }
-        }
+        try:
+            cur = conn.cursor()
+            
+            # Cek apakah email SUDAH didaftarkan oleh Admin
+            cur.execute("SELECT role, division, name FROM users WHERE email = %s", (email,))
+            user_record = cur.fetchone()
+            
+            if user_record:
+                # Jika ada, izinkan masuk dan ambil datanya
+                user_role = user_record[0]
+                user_division = user_record[1]
+                user_name = user_record[2]
+                
+                return {
+                    "status": "success",
+                    "user": {
+                        "email": email,
+                        "name": user_name,
+                        "role": user_role,
+                        "division": user_division
+                    }
+                }
+            else:
+                # Jika tidak ada, tolak dengan tegas (Strict Whitelisting)
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Akun Anda belum terdaftar. Silakan hubungi Tim IT untuk registrasi email."
+                )
+                
+        finally:
+            cur.close()
+            conn.close()
+            
     except ValueError:
         raise HTTPException(status_code=401, detail="Token Google tidak valid atau kadaluarsa")
+    except HTTPException:
+        raise # Lempar error 403 atau 401 ke frontend
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 2. JALUR LOKAL (KHUSUS UNTUK TIM IT / SUPER ADMIN)
+@app.post("/api/auth/local")
+async def local_auth(request: LocalLoginRequest):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Gagal terhubung ke database")
+            
+        try:
+            cur = conn.cursor()
+            
+            # Cek kecocokan username dan password
+            cur.execute(
+                "SELECT email, name, role, division FROM users WHERE username = %s AND password = %s",
+                (request.username, request.password)
+            )
+            admin_record = cur.fetchone()
+            
+            if admin_record:
+                return {
+                    "status": "success",
+                    "user": {
+                        "email": admin_record[0] or request.username, # Fallback ke username jika email null
+                        "name": admin_record[1],
+                        "role": admin_record[2],
+                        "division": admin_record[3]
+                    }
+                }
+            else:
+                raise HTTPException(status_code=401, detail="Akses ditolak: Username atau Password salah.")
+                
+        finally:
+            cur.close()
+            conn.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- ENDPOINT CHAT ---
 @app.post("/api/chat")

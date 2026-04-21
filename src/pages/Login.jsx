@@ -14,20 +14,27 @@ export default function Login({ onLoginSuccess }) {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
+      // PERBAIKAN 1: Endpoint disesuaikan ke /api/auth/local
+      const response = await fetch('http://127.0.0.1:8000/api/auth/local', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          username: formData.username,
+          password: formData.password
+        })
       });
 
       const data = await response.json();
-      if (data.status === 'success') {
+      
+      // PERBAIKAN 2: Pengecekan response.ok dan penangkapan data.detail
+      if (response.ok && data.status === 'success') {
         onLoginSuccess(data.user);
       } else {
-        alert(data.message || "Login Gagal: Username atau Password salah.");
+        alert(data.detail || "Login Gagal: Username atau Password salah.");
       }
     } catch (error) {
       console.error("Manual Auth Error:", error);
+      alert("Gagal terhubung ke server.");
     } finally {
       setIsSubmitting(false);
     }
@@ -40,14 +47,17 @@ export default function Login({ onLoginSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: credentialResponse.credential })
       });
+      
       const data = await response.json();
-      if (data.status === 'success') {
+      
+      if (response.ok && data.status === 'success') {
         onLoginSuccess(data.user);
       } else {
-        alert("Login Gagal: Domain email tidak diizinkan.");
+        alert(`Login Gagal: ${data.detail || "Domain email tidak diizinkan."}`);
       }
     } catch (error) {
       console.error("Google Auth Error:", error);
+      alert("Gagal terhubung ke server autentikasi.");
     }
   };
 
@@ -91,7 +101,7 @@ export default function Login({ onLoginSuccess }) {
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4">Username</label>
             <input 
               type="text" 
-              placeholder="e.g. danar.support"
+              placeholder="e.g. admin"
               className="w-full px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500/20 transition-all text-sm"
               value={formData.username}
               onChange={(e) => setFormData({...formData, username: e.target.value})}
@@ -116,7 +126,7 @@ export default function Login({ onLoginSuccess }) {
             disabled={isSubmitting}
             className="w-full py-4 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-red-600/20 active:scale-[0.98] transition-all"
           >
-            {isSubmitting ? 'Authenticating...' : 'Sign In x'}
+            {isSubmitting ? 'Authenticating...' : 'Sign In'}
           </button>
         </form>
 
