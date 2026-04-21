@@ -51,7 +51,7 @@ async def google_auth(request: GoogleAuthRequest):
         # Kamu bisa mengatur siapa saja yang menjadi SPV atau Admin di sini
         if email == "supervisor@radikari.com" or "spv" in email:
             user_role = "SPV"
-        elif "omar" in email.lower() or "fauzi" in email.lower(): 
+        elif "yudhi" in email.lower() or "bayuaji" in email.lower(): 
             user_role = "SUPER_ADMIN" # Akses penuh untuk developer
             
         return {
