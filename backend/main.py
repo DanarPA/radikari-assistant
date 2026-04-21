@@ -48,16 +48,6 @@ async def google_auth(request: GoogleAuthRequest):
         idinfo = id_token.verify_oauth2_token(request.token, google_requests.Request(), GOOGLE_CLIENT_ID)
         email = idinfo.get('email')
         
-<<<<<<< HEAD
-        # Penentuan Hak Akses (Role) Berdasarkan Email
-        user_role = "STAFF" # Default untuk user biasa
-        
-        # Kamu bisa mengatur siapa saja yang menjadi SPV atau Admin di sini
-        if email == "supervisor@radikari.com" or "spv" in email:
-            user_role = "SPV"
-        elif "yudhi" in email.lower() or "bayuaji" in email.lower(): 
-            user_role = "SUPER_ADMIN" # Akses penuh untuk developer
-=======
         # Buka koneksi ke Database
         conn = get_db_connection()
         if not conn:
@@ -95,7 +85,6 @@ async def google_auth(request: GoogleAuthRequest):
         finally:
             cur.close()
             conn.close()
->>>>>>> dc89cbdf60bd66636fed6d0d760133f82b98b66c
             
     except ValueError:
         raise HTTPException(status_code=401, detail="Token Google tidak valid atau kadaluarsa")
