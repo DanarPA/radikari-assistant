@@ -100,8 +100,7 @@ export default function Login({ onLoginSuccess }) {
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4">Username</label>
             <input 
-              type="text" 
-              placeholder="e.g. admin"
+              type="text"
               className="w-full px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500/20 transition-all text-sm"
               value={formData.username}
               onChange={(e) => setFormData({...formData, username: e.target.value})}
@@ -113,7 +112,6 @@ export default function Login({ onLoginSuccess }) {
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4">Password</label>
             <input 
               type="password" 
-              placeholder="••••••••"
               className="w-full px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500/20 transition-all text-sm"
               value={formData.password}
               onChange={(e) => setFormData({...formData, password: e.target.value})}
