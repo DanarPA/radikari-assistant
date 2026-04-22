@@ -9,40 +9,40 @@ export default function Sidebar({ activeMenu, setActiveMenu, isSidebarOpen, setI
       id: 'dashboard', 
       label: 'Dashboard', 
       icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z', 
-      roles: ['Super_Admin', 'HR', 'Finance', 'Marketing'] 
+      roles: ['SUPER_ADMIN', 'HR', 'Finance', 'Marketing'] 
     },
     { 
       id: 'hr', 
       label: 'HR Division', 
       icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', 
-      roles: ['Super_Admin', 'HR'], // Admin bisa lihat
+      roles: ['SUPER_ADMIN', 'HR'], // Admin bisa lihat
       hasApproval: true 
     },
     { 
       id: 'finance', 
       label: 'Finance', 
       icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', 
-      roles: ['Super_Admin', 'Finance'], // Admin bisa lihat
+      roles: ['SUPER_ADMIN', 'Finance'], // Admin bisa lihat
       hasApproval: true 
     },
     { 
       id: 'marketing', 
       label: 'Marketing', 
       icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z', 
-      roles: ['Super_Admin', 'Marketing'], // Admin bisa lihat
+      roles: ['SUPER_ADMIN', 'Marketing'], // Admin bisa lihat
       hasApproval: true 
     }, 
     { 
       id: 'ai-assistant', 
       label: 'AI Assistant', 
       icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.989-2.386l-.548-.547z', 
-      roles: ['Super_Admin', 'HR', 'Finance', 'Marketing'] 
+      roles: ['SUPER_ADMIN', 'HR', 'Finance', 'Marketing'] 
     },
     {
       id: 'user-management',
       label: 'User Management',
       icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z',
-      roles: ['Super_Admin'] 
+      roles: ['SUPER_ADMIN'] 
     }
   ];
 
@@ -103,7 +103,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, isSidebarOpen, setI
             {/* SUB-MENU LOGIC: Center Approval */}
             {menu.hasApproval && activeMenu.startsWith(menu.id) && isSidebarOpen && (
               /* KUNCI: Hanya muncul jika user BUKAN Super_Admin */
-              userRole !== 'Super_Admin' ? (
+              userRole !== 'SUPER_ADMIN' ? (
                 <button
                   onClick={() => setActiveMenu(`${menu.id}-approval`)}
                   className={`w-full flex items-center gap-3 p-2.5 ml-8 rounded-xl transition-all animate-in slide-in-from-left-2 duration-200 
@@ -130,7 +130,7 @@ export default function Sidebar({ activeMenu, setActiveMenu, isSidebarOpen, setI
       {isSidebarOpen && (
         <div className="p-6 border-t border-slate-800/50">
           <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800 flex items-center gap-2">
-            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${userRole === 'Super_Admin' ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
+            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${userRole === 'SUPER_ADMIN' ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
             <p className="text-[9px] text-slate-400 font-mono uppercase tracking-tighter">
               Node: <span className="text-white font-bold">{userRole}</span>
             </p>

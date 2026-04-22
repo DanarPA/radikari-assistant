@@ -1,37 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  /* 1. Deklarasikan variabel default di sini */
-  --color-scrollbar-thumb: #1e293b;
-  --color-scrollbar-hover: #ef4444;
+  /* Ini bakal bikin Tailwind v4 mengenali class .dark di elemen <html> */
+  --font-sans: "Inter", ui-sans-serif, system-ui;
 }
 
-/* 2. Gunakan @utility atau layer untuk memanipulasi variabel saat dark mode */
-@layer base {
-  :root {
-    /* Variabel default sudah ada di @theme, tapi kita bisa override di sini jika perlu */
-  }
-
-  .dark {
-    /* Di v4, cara paling aman untuk override variabel dark mode adalah seperti ini */
-    --color-scrollbar-thumb: #94a3b8;
-    --color-scrollbar-hover: #f87171;
-  }
-}
-
-/* 3. Definisi Scrollbar Utility */
-@utility custom-scrollbar {
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background-color: var(--color-scrollbar-thumb);
-    border-radius: 10px;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-scrollbar-hover);
-  }
-}
+/* DI TAILWIND V4: 
+   Lo harus manual mapping variabel warna kalau mau transisi 
+   atau pastikan class .dark ada di paling atas.
+*/
+@variant dark (&:where(.dark, .dark *));
