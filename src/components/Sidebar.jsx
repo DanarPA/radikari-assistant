@@ -37,7 +37,13 @@ export default function Sidebar({ activeMenu, setActiveMenu, isSidebarOpen, setI
       icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.989-2.386l-.548-.547z', 
       roles: ['SUPER_ADMIN', 'HR', 'FINANCE', 'MARKETING'] 
     },
-
+    // --- MENU BARU KHUSUS SUPER ADMIN ---
+    {
+      id: 'user-management',
+      label: 'User Management', // Disingkat sedikit agar muat dengan rapi di sidebar
+      icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z',
+      roles: ['SUPER_ADMIN'] // Kunci hanya untuk IT/Developer
+    }
   ];
 
   const filteredMenus = allMenus.filter(m => m.roles.includes(userRole));

@@ -40,6 +40,20 @@ class LocalLoginRequest(BaseModel):
     username: str
     password: str
 
+# Schema untuk registrasi user
+class UserRegisterRequest(BaseModel):
+    admin_id: str  # Email atau Username dari Super Admin yang sedang login
+    email: str
+    name: str
+    role: str
+    division: str
+
+# Schema untuk update user
+class UserUpdateRequest(BaseModel):
+    admin_id: str
+    role: str
+    division: str
+
 # 1. JALUR GOOGLE WORKSPACE (UNTUK KARYAWAN)
 @app.post("/api/auth/google")
 async def google_auth(request: GoogleAuthRequest):
@@ -133,6 +147,122 @@ async def local_auth(request: LocalLoginRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 3. ENDPOINT REGISTRASI USER BARU (KHUSUS SUPER ADMIN)
+@app.post("/api/users/register")
+async def register_user(request: UserRegisterRequest):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Gagal terhubung ke database")
+            
+        try:
+            cur = conn.cursor()
+            
+            # --- 1. VERIFIKASI KEAMANAN: Pastikan yang me-request benar-benar SUPER_ADMIN ---
+            cur.execute("SELECT role FROM users WHERE email = %s OR username = %s", (request.admin_id, request.admin_id))
+            admin_record = cur.fetchone()
+            
+            if not admin_record or admin_record[0] != "SUPER_ADMIN":
+                raise HTTPException(status_code=403, detail="Akses Ditolak: Hanya Super Admin yang dapat mendaftarkan akun baru.")
+            
+            # --- 2. VALIDASI LOGIKA BISNIS ---
+            if request.role == "SUPER_ADMIN" and request.division != "IT":
+                raise HTTPException(status_code=400, detail="Kesalahan Sistem: Hak akses Super Admin hanya dapat diberikan untuk Divisi IT.")
+
+            # --- 3. PROSES REGISTRASI ---
+            # Pastikan email belum pernah didaftarkan
+            cur.execute("SELECT email FROM users WHERE email = %s", (request.email,))
+            if cur.fetchone():
+                raise HTTPException(status_code=400, detail="Email workspace ini sudah terdaftar di sistem!")
+                
+            # Masukkan user baru
+            cur.execute(
+                "INSERT INTO users (email, name, role, division) VALUES (%s, %s, %s, %s)",
+                (request.email, request.name, request.role, request.division)
+            )
+            conn.commit()
+            
+            return {"status": "success", "message": f"Akses untuk {request.name} ({request.role}) berhasil dibuat!"}
+            
+        finally:
+            cur.close()
+            conn.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 4. ENDPOINT AMBIL SEMUA DATA USER
+@app.get("/api/users")
+async def get_all_users(admin_id: str):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Gagal terhubung ke database")
+            
+        try:
+            cur = conn.cursor()
+            
+            # Verifikasi bahwa yang meminta data adalah SUPER_ADMIN
+            cur.execute("SELECT role FROM users WHERE email = %s OR username = %s", (admin_id, admin_id))
+            admin_record = cur.fetchone()
+            
+            if not admin_record or admin_record[0] != "SUPER_ADMIN":
+                raise HTTPException(status_code=403, detail="Akses Ditolak.")
+                
+            # Ambil semua user
+            cur.execute("SELECT id, email, name, role, division, username FROM users ORDER BY id DESC")
+            users = [{"id": row[0], "email": row[1], "name": row[2], "role": row[3], "division": row[4], "username": row[5]} for row in cur.fetchall()]
+            
+            return {"status": "success", "data": users}
+        finally:
+            cur.close()
+            conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 5. ENDPOINT UPDATE JABATAN & DIVISI USER
+@app.patch("/api/users/{user_id}")
+async def update_user(user_id: int, request: UserUpdateRequest):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="Gagal terhubung ke database")
+            
+        try:
+            cur = conn.cursor()
+            
+            # Verifikasi Super Admin
+            cur.execute("SELECT role FROM users WHERE email = %s OR username = %s", (request.admin_id, request.admin_id))
+            admin_record = cur.fetchone()
+            if not admin_record or admin_record[0] != "SUPER_ADMIN":
+                raise HTTPException(status_code=403, detail="Akses Ditolak.")
+            
+            # Validasi logika divisi IT
+            if request.role == "SUPER_ADMIN" and request.division != "IT":
+                raise HTTPException(status_code=400, detail="Super Admin harus berada di divisi IT.")
+                
+            # Eksekusi Update (Kita hanya mengizinkan update role dan division)
+            cur.execute(
+                "UPDATE users SET role = %s, division = %s WHERE id = %s",
+                (request.role, request.division, user_id)
+            )
+            conn.commit()
+            
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="User tidak ditemukan.")
+                
+            return {"status": "success", "message": "Data user berhasil diperbarui!"}
+        finally:
+            cur.close()
+            conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- ENDPOINT CHAT ---
 @app.post("/api/chat")

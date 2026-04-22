@@ -5,7 +5,7 @@ import Sidebar from './components/Sidebar';
 import UserHeader from './components/UserHeader';
 import ChatAssistant from './components/ChatAssistant';
 import MonitoringDashboard from './components/MonitoringDashboard';
-// MATIKAN SEMENTARA: import { ThemeToggle } from './components/ThemeToggle';
+// import { ThemeToggle } from './components/ThemeToggle'; // <- Masih dimatikan sementara
 
 // --- APPROVAL COMPONENTS ---
 import AuditTable from './components/ApprovalDashboard/AuditTable';
@@ -18,9 +18,9 @@ import HRDashboard from './pages/HRDashboard';
 import FinanceDashboard from './pages/FinanceDashboard';
 import MarketingDashboard from './pages/MarketingDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import UserManagement from './pages/UserManagement'; // <- IMPORT HALAMAN BARU DI SINI
 
 export default function App() {
-  // Mengambil sesi user dari localStorage jika ada, agar tidak perlu login ulang saat di-refresh
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('radikari_user');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -74,9 +74,16 @@ export default function App() {
   };
 
   const renderContent = () => {
+    // TAMPILAN DASHBOARD SUPER ADMIN
     if (user?.role === 'SUPER_ADMIN' && activeMenu === 'dashboard') {
       return <AdminDashboard allLogs={allLogs} user={user} />;
     }
+    
+    // TAMPILAN USER MANAGEMENT (KHUSUS SUPER ADMIN)
+    if (user?.role === 'SUPER_ADMIN' && activeMenu === 'user-management') {
+      return <UserManagement user={user} />;
+    }
+
     if (activeMenu.toLowerCase().includes('approval')) {
       return (
         <ApprovalDashboardPage 
@@ -87,6 +94,7 @@ export default function App() {
         />
       );
     }
+    
     switch (activeMenu) {
       case 'dashboard': return <MonitoringDashboard user={user} />;
       case 'hr': return <HRDashboard />;
@@ -127,7 +135,7 @@ export default function App() {
           
           <div className="flex items-center gap-5">
             <div className="p-1.5 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner flex items-center justify-center">
-               {/* MATIKAN SEMENTARA: <ThemeToggle /> */}
+               {/* <ThemeToggle /> */}
             </div>
 
             <div className="h-8 w-[1.5px] bg-slate-200 dark:bg-white/10 rotate-[15deg] opacity-60" />
