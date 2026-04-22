@@ -1,0 +1,29 @@
+services:
+  gateway:
+    image: openclaw/gateway:latest
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    ports:
+      - "18789:18789"
+    volumes:
+      - ./:/home/node/.openclaw
+    environment:
+      - OPENCLAW_BIND=0.0.0.0
+
+  db:
+    image: postgres:15-alpine
+    container_name: radikari_db
+    environment:
+      # Mengambil nilai dari .env kamu
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: radikari123
+      POSTGRES_DB: radikari_db
+    ports:
+      # Mapping port 5433 di Windows ke 5432 di dalam Docker
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  postgres_data:

@@ -66,3 +66,5 @@ next-env.d.ts
 # Radikari Secrets (WAJIB)
 openclaw.json
 exec-approvals.json
+
+__pycache__/
