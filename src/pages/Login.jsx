@@ -13,28 +13,47 @@ export default function Login({ onLoginSuccess }) {
   const handleManualLogin = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    try {
-      // PERBAIKAN 1: Endpoint disesuaikan ke /api/auth/local
-      const response = await fetch('http://127.0.0.1:8000/api/auth/local', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: formData.username,
-          password: formData.password
-        })
-      });
 
-      const data = await response.json();
+    // --- DATABASE DUMMY PER DIVISI (STAFF & SPV) ---
+    const dummyUsers = [
+      // HR Division
+      { username: 'hr_staff', password: '123', role: 'HR', position: 'Staff', name: 'Hana HR' },
+      { username: 'hr_spv', password: '123', role: 'HR', position: 'SPV', name: 'Herman Manager' },
       
-      // PERBAIKAN 2: Pengecekan response.ok dan penangkapan data.detail
-      if (response.ok && data.status === 'success') {
-        onLoginSuccess(data.user);
+      // Marketing Division
+      { username: 'mkt_staff', password: '123', role: 'Marketing', position: 'Staff', name: 'Mahendra Marketing' },
+      { username: 'mkt_spv', password: '123', role: 'Marketing', position: 'SPV', name: 'Mita Lead' },
+      
+      // Finance Division
+      { username: 'fin_staff', password: '123', role: 'Finance', position: 'Staff', name: 'Fani Finance' },
+      { username: 'fin_spv', password: '123', role: 'Finance', position: 'SPV', name: 'Fahri Auditor' },
+      
+      // Super Admin
+            { username: 'admin_spv', password: '123', role: 'Super_Admin', position: 'SPV', name: 'Radikari Master' }
+    ];
+
+    try {
+      // Efek loading 800ms biar dapet feel "authenticating"
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const userFound = dummyUsers.find(
+        (u) => u.username === formData.username && u.password === formData.password
+      );
+
+      if (userFound) {
+        // Kirim data user lengkap ke parent component
+        onLoginSuccess({
+          username: userFound.username,
+          name: userFound.name,
+          role: userFound.role,
+          position: userFound.position,
+          full_role: `${userFound.role} (${userFound.position})`
+        });
       } else {
-        alert(data.detail || "Login Gagal: Username atau Password salah.");
+        alert("Akses Ditolak: Username atau Password salah.");
       }
     } catch (error) {
-      console.error("Manual Auth Error:", error);
-      alert("Gagal terhubung ke server.");
+      console.error("Mock Login Error:", error);
     } finally {
       setIsSubmitting(false);
     }

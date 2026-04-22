@@ -1,30 +1,24 @@
 import React, { useState, useEffect } from 'react';
 
 export default function HRDashboard() {
-  // 1. State penampung data
-  const [approvalLogs, setApprovalLogs] = useState([]);
-  const [historyLogs, setHistoryLogs] = useState([]); // State untuk menampung history
+  // 1. State penampung data (Hanya fokus ke History)
+  const [historyLogs, setHistoryLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // State untuk mengontrol tab mana yang sedang aktif ('pending' atau 'history')
-  const [activeTab, setActiveTab] = useState('pending'); 
 
-  // 2. Fungsi untuk menarik data dari FastAPI (Filter Khusus HR dengan .includes)
+  // 2. Fungsi untuk menarik data dari FastAPI
   const fetchLogs = async () => {
     try {
       setIsLoading(true);
       
-      // Di bagian Pending
-const hrPending = dataPending.data.filter(log => 
-  log.category?.toLowerCase().includes('hr') || log.category?.toLowerCase().includes('ai-assistant')
-);
-setApprovalLogs(hrPending);
+      // Simulasi fetch data history (Pastikan endpoint sesuai dengan backend-mu)
+      const response = await fetch('http://127.0.0.1:8000/api/approval-logs/history');
+      const data = await response.json();
 
-// Di bagian History
-const hrHistory = dataHistory.data.filter(log => 
-  log.category?.toLowerCase().includes('hr') || log.category?.toLowerCase().includes('ai-assistant')
-);
-setHistoryLogs(hrHistory);
+      // Filter Khusus HR & AI Assistant
+      const hrHistory = data.filter(log => 
+        log.category?.toLowerCase().includes('hr') || log.category?.toLowerCase().includes('ai-assistant')
+      );
+      setHistoryLogs(hrHistory);
 
     } catch (error) {
       console.error("Gagal mengambil data log:", error);
@@ -37,33 +31,12 @@ setHistoryLogs(hrHistory);
     fetchLogs();
   }, []);
 
-  // 3. Fungsi untuk mengeksekusi aksi Approve/Reject
-  const handleApprovalAction = async (id, actionStatus) => {
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/approval-logs/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: actionStatus })
-      });
-
-      if (response.ok) {
-        // Refresh tabel agar data pindah dari tab Pending ke tab History
-        fetchLogs();
-      }
-    } catch (error) {
-      console.error(`Gagal melakukan ${actionStatus}:`, error);
-    }
-  };
-
-  // 4. Update data statis
+  // 3. Data statistik (Pending Approval dihapus dari list)
   const stats = [
     { label: 'Total Personnel', value: '124', color: 'text-white' },
     { label: 'Active Node', value: '89', color: 'text-emerald-500' },
-    { label: 'Pending Approval', value: approvalLogs.length.toString(), color: 'text-red-500' },
+    { label: 'Processed Logs', value: historyLogs.length.toString(), color: 'text-indigo-400' },
   ];
-
-  // Penentuan data mana yang akan dirender berdasarkan tab yang aktif
-  const displayedLogs = activeTab === 'pending' ? approvalLogs : historyLogs;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -83,7 +56,9 @@ setHistoryLogs(hrHistory);
           onClick={fetchLogs} 
           className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold text-slate-400 hover:text-white hover:bg-white/10 transition-all uppercase tracking-widest flex items-center gap-2"
         >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
           Refresh Data
         </button>
       </div>
@@ -100,68 +75,45 @@ setHistoryLogs(hrHistory);
         ))}
       </div>
 
-      {/* 3. MAIN CONTENT AREA (Dynamic Table with Tabs) */}
+      {/* 3. MAIN CONTENT AREA (Hanya History) */}
       <div className="bg-slate-900/20 border border-white/5 rounded-[2.5rem] overflow-hidden">
         <div className="p-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
           <h3 className="text-[11px] font-black text-white uppercase tracking-widest">
-            {activeTab === 'pending' ? 'Pending Action Logs' : 'Action History Logs'}
+            Action History Logs
           </h3>
-          
-          {/* TOMBOL NAVIGASI TAB (Dua Titik) */}
-          <div className="flex gap-2">
-             <button 
-                onClick={() => setActiveTab('pending')}
-                className={`w-2 h-2 rounded-full transition-all cursor-pointer ${activeTab === 'pending' ? 'bg-red-600 animate-pulse scale-125' : 'bg-slate-700 hover:bg-slate-500'}`}
-                title="View Pending Approvals"
-             />
-             <button 
-                onClick={() => setActiveTab('history')}
-                className={`w-2 h-2 rounded-full transition-all cursor-pointer ${activeTab === 'history' ? 'bg-red-600 animate-pulse scale-125' : 'bg-slate-700 hover:bg-slate-500'}`}
-                title="View Action History"
-             />
-          </div>
+          <span className="text-[9px] font-mono text-slate-600 uppercase">Read-Only Mode</span>
         </div>
         
-        {/* LOGIC TAMPILAN: Loading, Kosong, atau Ada Data */}
         <div className="p-2 transition-all duration-300">
           {isLoading ? (
-            <div className="p-10 text-center text-slate-500 text-sm animate-pulse">Scanning database...</div>
-          ) : displayedLogs.length === 0 ? (
-            // Tampilan kosong (disesuaikan berdasarkan tab)
+            <div className="p-10 text-center text-slate-500 text-sm animate-pulse font-mono uppercase tracking-widest">Scanning database...</div>
+          ) : historyLogs.length === 0 ? (
             <div className="p-10 text-center">
               <div className="inline-block p-4 rounded-full bg-slate-800/50 mb-4 border border-white/5">
                  <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                  </svg>
               </div>
-              <h4 className="text-white font-bold text-sm">
-                {activeTab === 'pending' ? 'System Clear' : 'No History Found'}
-              </h4>
+              <h4 className="text-white font-bold text-sm uppercase">No Records Found</h4>
               <p className="text-[10px] text-slate-500 mt-1 max-w-xs mx-auto uppercase tracking-tighter">
-                {activeTab === 'pending' 
-                  ? 'No pending requests in the queue. System is fully synchronized.' 
-                  : 'There are no previously processed requests in the database.'}
+                The personnel activity log is currently empty.
               </p>
             </div>
           ) : (
-            // Tampilan List Data
             <div className="divide-y divide-white/5">
-              {displayedLogs.map((log) => (
+              {historyLogs.map((log) => (
                 <div key={log.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
                   
                   {/* Info Aksi */}
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
-                      <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded border ${
-                        activeTab === 'pending' 
-                          ? 'bg-red-600/20 text-red-500 border-red-500/30' 
-                          : 'bg-slate-800 text-slate-400 border-slate-700'
-                      }`}>
+                      <span className="bg-slate-800 text-slate-400 border-slate-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded border">
                         {log.action}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-mono">{log.time.split('.')[0]}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {log.time?.split('.')[0] || 'N/A'}
+                      </span>
                     </div>
-                    {/* Menampilkan isi data request user */}
                     <p className="text-xs text-slate-300 font-mono mt-2 line-clamp-2 bg-[#020617] p-2 rounded border border-white/5">
                       {log.request}
                     </p>
@@ -170,34 +122,15 @@ setHistoryLogs(hrHistory);
                     </p>
                   </div>
 
-                  {/* Area Tombol atau Status */}
+                  {/* Area Label Status (Bukan Tombol) */}
                   <div className="flex gap-2 shrink-0 items-center">
-                    {activeTab === 'pending' ? (
-                      // Jika di tab Pending: Tampilkan tombol Approve/Reject
-                      <>
-                        <button 
-                          onClick={() => handleApprovalAction(log.id, 'Rejected')}
-                          className="px-4 py-2 bg-slate-800/50 hover:bg-slate-700 text-slate-300 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors"
-                        >
-                          Reject
-                        </button>
-                        <button 
-                          onClick={() => handleApprovalAction(log.id, 'Approved')}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-[0_0_15px_rgba(5,150,105,0.4)] transition-all active:scale-95"
-                        >
-                          Approve
-                        </button>
-                      </>
-                    ) : (
-                      // Jika di tab History: Tampilkan Label Status Permanen (Bukan tombol)
-                      <span className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg border ${
-                        log.status === 'Approved' 
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
-                          : 'bg-slate-800/50 text-slate-400 border-slate-700/50'
-                      }`}>
-                        {log.status}
-                      </span>
-                    )}
+                    <span className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg border ${
+                      log.status?.toLowerCase() === 'approved' 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}>
+                      {log.status}
+                    </span>
                   </div>
                 </div>
               ))}
